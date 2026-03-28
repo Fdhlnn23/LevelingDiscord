@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, AttachmentBuilder, Collection } = require('discord.js');
-const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const fs = require('fs');
 const path = require('path');
 
@@ -17,7 +17,6 @@ const client = new Client({
 client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-
 for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
     const command = require(filePath);
@@ -38,9 +37,7 @@ if (!fs.existsSync(settingsDbPath)) fs.writeFileSync(settingsDbPath, JSON.string
 function readDB(dbPath) { return JSON.parse(fs.readFileSync(dbPath, 'utf8')); }
 function writeDB(dbPath, data) { fs.writeFileSync(dbPath, JSON.stringify(data, null, 4)); }
 
-// ==========================================
-// IN-MEMORY XP CACHE
-// ==========================================
+// ── IN-MEMORY XP CACHE ──
 let xpCache = readDB(xpDbPath);
 let xpCacheDirty = false;
 
@@ -60,22 +57,9 @@ const XP_PER_MESSAGE = 20;
 const XP_PER_VOICE_TICK = 15;
 const VOICE_XP_INTERVAL_MS = 10000;
 const PREFIX = '?';
-
 const XP_TO_LEVEL_UP = (level) => Math.floor(100 * Math.pow(level + 1, 1.8));
 
-// ==========================================
-// HELPER: Buat lingkaran clip untuk avatar
-// ==========================================
-function clipCircle(ctx, x, y, radius) {
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2, true);
-    ctx.closePath();
-    ctx.clip();
-}
-
-// ==========================================
-// HELPER: Gambar rounded rectangle
-// ==========================================
+// ── HELPER: rounded rect ──
 function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -90,37 +74,32 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-// ==========================================
-// HELPER: Render Level Up Card (Canvas)
-// Desain: card gelap blur-glass di atas bg berwarna
-// ==========================================
+// ── RENDER LEVEL UP CARD ──
 async function renderLevelUpCard(member, newLevel) {
     const W = 800, H = 250;
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
-    // --- Background gradient (menggantikan unsplash bg) ---
+    // WAJIB — tanpa ini teks tidak muncul
+    ctx.textBaseline = 'alphabetic';
+
+    // Background gradient
     const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-    bgGrad.addColorStop(0, '#0f172a');
+    bgGrad.addColorStop(0,   '#0f172a');
     bgGrad.addColorStop(0.5, '#1e1b4b');
-    bgGrad.addColorStop(1, '#0f172a');
+    bgGrad.addColorStop(1,   '#0f172a');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // Dekoratif: titik-titik cahaya
+    // Partikel dekoratif
     for (let i = 0; i < 40; i++) {
         ctx.beginPath();
-        ctx.arc(
-            Math.random() * W,
-            Math.random() * H,
-            Math.random() * 1.5,
-            0, Math.PI * 2
-        );
-        ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.3})`;
+        ctx.arc(Math.random() * W, Math.random() * H, Math.random() * 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
         ctx.fill();
     }
 
-    // --- Card glass (rgba dark) ---
+    // Card glass
     const cardX = 40, cardY = 35, cardW = 720, cardH = 180, cardR = 20;
     ctx.save();
     roundRect(ctx, cardX, cardY, cardW, cardH, cardR);
@@ -131,61 +110,71 @@ async function renderLevelUpCard(member, newLevel) {
     ctx.stroke();
     ctx.restore();
 
-    // --- Avatar ---
-    const avatarUrl = member.user.displayAvatarURL({ extension: 'png', size: 256 });
+    // Avatar
     const avatarSize = 130;
-    const avatarX = cardX + 35;
-    const avatarY = cardY + (cardH / 2);
+    const avatarCX = cardX + 40 + avatarSize / 2;
+    const avatarCY = cardY + cardH / 2;
 
     try {
+        const avatarUrl = member.user.displayAvatarURL({ extension: 'png', size: 256 });
         const avatarImg = await loadImage(avatarUrl);
+
+        // Border lingkaran
         ctx.save();
-        // Border lingkaran avatar
         ctx.beginPath();
-        ctx.arc(avatarX, avatarY, avatarSize / 2 + 5, 0, Math.PI * 2);
+        ctx.arc(avatarCX, avatarCY, avatarSize / 2 + 5, 0, Math.PI * 2);
         ctx.fillStyle = '#38bdf8';
         ctx.fill();
-        // Clip & gambar avatar
-        clipCircle(ctx, avatarX, avatarY, avatarSize / 2);
-        ctx.drawImage(avatarImg, avatarX - avatarSize / 2, avatarY - avatarSize / 2, avatarSize, avatarSize);
         ctx.restore();
-    } catch (e) {
-        // Fallback avatar placeholder
+
+        // Clip & gambar avatar
         ctx.save();
         ctx.beginPath();
-        ctx.arc(avatarX, avatarY, avatarSize / 2, 0, Math.PI * 2);
+        ctx.arc(avatarCX, avatarCY, avatarSize / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(avatarImg, avatarCX - avatarSize / 2, avatarCY - avatarSize / 2, avatarSize, avatarSize);
+        ctx.restore();
+    } catch (e) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(avatarCX, avatarCY, avatarSize / 2 + 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#38bdf8';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(avatarCX, avatarCY, avatarSize / 2, 0, Math.PI * 2);
         ctx.fillStyle = '#334155';
         ctx.fill();
         ctx.restore();
     }
 
-    // --- Teks: LEVEL UP! ---
-    const textX = avatarX + avatarSize / 2 + 35;
-    ctx.font = 'bold 14px "Segoe UI", Arial';
+    // Teks — textBaseline dipastikan ulang setelah save/restore
+    const textX = avatarCX + avatarSize / 2 + 35;
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign    = 'left';
+
+    // Label "LEVEL UP!"
+    ctx.font      = 'bold 15px sans-serif';
     ctx.fillStyle = '#94a3b8';
-    ctx.letterSpacing = '3px';
-    ctx.fillText('LEVEL UP!', textX, cardY + 60);
-    ctx.letterSpacing = '0px';
+    ctx.fillText('LEVEL UP!', textX, cardY + 70);
 
-    // --- Teks: Username ---
-    ctx.font = 'bold 42px "Segoe UI", Arial';
-    ctx.fillStyle = '#f8fafc';
+    // Username
+    ctx.font        = 'bold 42px sans-serif';
+    ctx.fillStyle   = '#f8fafc';
     ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 6;
-    ctx.fillText(member.user.username, textX, cardY + 110);
-    ctx.shadowBlur = 0;
+    ctx.shadowBlur  = 6;
+    ctx.fillText(member.user.username, textX, cardY + 120);
+    ctx.shadowBlur  = 0;
 
-    // --- Teks: Level ---
-    ctx.font = 'bold 32px "Segoe UI", Arial';
+    // Level
+    ctx.font      = 'bold 32px sans-serif';
     ctx.fillStyle = '#38bdf8';
-    ctx.fillText(`Level ${newLevel}`, textX, cardY + 155);
+    ctx.fillText(`Level ${newLevel}`, textX, cardY + 162);
 
     return canvas.toBuffer('image/png');
 }
 
-// ==========================================
-// HELPER: Tambah XP + cek level up
-// ==========================================
+// ── TAMBAH XP + CEK LEVEL UP ──
 async function addXpAndCheckLevelUp(guildId, userId, xpAmount, notifyTarget) {
     const dbKey = `${guildId}_${userId}`;
     const entry = getXpEntry(dbKey);
@@ -196,23 +185,21 @@ async function addXpAndCheckLevelUp(guildId, userId, xpAmount, notifyTarget) {
     const xpNeeded = XP_TO_LEVEL_UP(entry.level);
     if (entry.xp < xpNeeded) return;
 
-    // --- LEVEL UP! ---
     entry.level += 1;
-    entry.xp -= xpNeeded;
+    entry.xp    -= xpNeeded;
     xpCacheDirty = true;
 
     const newLevel = entry.level;
-
-    const guild = client.guilds.cache.get(guildId);
+    const guild    = client.guilds.cache.get(guildId);
     if (!guild) return;
     const member = await guild.members.fetch(userId).catch(() => null);
     if (!member) return;
 
     try {
         const imageBuffer = await renderLevelUpCard(member, newLevel);
-        const attachment = new AttachmentBuilder(imageBuffer, { name: 'levelup.png' });
+        const attachment  = new AttachmentBuilder(imageBuffer, { name: 'levelup.png' });
 
-        const settingsDb = readDB(settingsDbPath);
+        const settingsDb   = readDB(settingsDbPath);
         const logChannelId = settingsDb[guildId]?.logChannel;
 
         if (logChannelId) {
@@ -224,7 +211,7 @@ async function addXpAndCheckLevelUp(guildId, userId, xpAmount, notifyTarget) {
             notifyTarget.send({ content: `🎉 Selamat <@${userId}>, kamu naik level!`, files: [attachment] });
         }
     } catch (error) {
-        console.error("Gagal merender gambar level up:", error);
+        console.error('Gagal merender gambar level up:', error);
     }
 }
 
@@ -239,24 +226,20 @@ client.on('ready', () => {
     console.log('');
 
     let isVoiceTickRunning = false;
-
     setInterval(async () => {
         if (isVoiceTickRunning) return;
         isVoiceTickRunning = true;
-
         try {
             for (const guild of client.guilds.cache.values()) {
-                const settingsDb = readDB(settingsDbPath);
+                const settingsDb   = readDB(settingsDbPath);
                 const logChannelId = settingsDb[guild.id]?.logChannel;
                 const notifyChannel = logChannelId ? guild.channels.cache.get(logChannelId) : null;
 
                 for (const [, voiceChannel] of guild.channels.cache) {
                     if (!voiceChannel.isVoiceBased()) continue;
-
                     for (const [, member] of voiceChannel.members) {
                         if (member.user.bot) continue;
                         if (member.voice.selfMute && member.voice.selfDeaf) continue;
-
                         await addXpAndCheckLevelUp(guild.id, member.user.id, XP_PER_VOICE_TICK, notifyChannel);
                     }
                 }
@@ -271,9 +254,9 @@ client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
 
     if (message.content.startsWith(PREFIX)) {
-        const args = message.content.slice(PREFIX.length).trim().split(/ +/);
+        const args        = message.content.slice(PREFIX.length).trim().split(/ +/);
         const commandName = args.shift().toLowerCase();
-        const command = client.commands.get(commandName);
+        const command     = client.commands.get(commandName);
         if (!command) return;
         try {
             await command.execute(message, args, client);
