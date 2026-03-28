@@ -9,9 +9,6 @@ function readDB(dbPath) { return JSON.parse(fs.readFileSync(dbPath, 'utf8')); }
 
 const XP_TO_LEVEL_UP = (level) => Math.floor(100 * Math.pow(level + 1, 1.8));
 
-// ==========================================
-// HELPER: Rounded rectangle path
-// ==========================================
 function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -26,21 +23,19 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-// ==========================================
-// RENDER LEADERBOARD (Canvas)
-// Mirip desain HTML: list row dengan avatar kotak,
-// rank berwarna, progress bar tipis
-// ==========================================
 async function renderLeaderboard(usersData) {
-    const W = 680;
-    const ROW_H = 93;      // tinggi per baris (sama dengan HTML)
-    const SEP_H = 1;       // separator antar baris
-    const H = usersData.length * ROW_H + (usersData.length - 1) * SEP_H;
+    const W     = 680;
+    const ROW_H = 93;
+    const SEP_H = 1;
+    const H     = usersData.length * ROW_H + (usersData.length - 1) * SEP_H;
 
     const canvas = createCanvas(W, H);
-    const ctx = canvas.getContext('2d');
+    const ctx    = canvas.getContext('2d');
 
-    // Background canvas: #1e2128
+    // WAJIB — tanpa ini teks tidak muncul
+    ctx.textBaseline = 'alphabetic';
+
+    // Background
     ctx.fillStyle = '#1e2128';
     ctx.fillRect(0, 0, W, H);
 
@@ -48,20 +43,20 @@ async function renderLeaderboard(usersData) {
         const { username, avatarUrl, level, xp } = usersData[i];
         const yOffset = i * (ROW_H + SEP_H);
 
-        // --- Row background: #23272f ---
+        // Row background
         ctx.fillStyle = '#23272f';
         ctx.fillRect(0, yOffset, W, ROW_H);
 
-        // --- Separator ---
+        // Separator
         if (i > 0) {
             ctx.fillStyle = '#2e333d';
             ctx.fillRect(0, yOffset - SEP_H, W, SEP_H);
         }
 
-        // --- Avatar (kotak rounded tipis) ---
+        // Avatar
         const avatarSize = 64;
-        const avatarX = 20;
-        const avatarY = yOffset + (ROW_H - avatarSize) / 2;
+        const avatarX    = 20;
+        const avatarY    = yOffset + (ROW_H - avatarSize) / 2;
 
         try {
             const avatarImg = await loadImage(avatarUrl);
@@ -78,56 +73,55 @@ async function renderLeaderboard(usersData) {
             ctx.restore();
         }
 
-        // --- Info area ---
+        // ── Teks baris ──
         const infoX = avatarX + avatarSize + 16;
         const infoW = W - infoX - 20;
 
-        // Top line: #rank • @username • LVL: N
-        // Rank color: oranye untuk top 3, putih lainnya
-        const rankColor = i < 3 ? '#f97316' : '#ffffff';
+        // Pastikan textBaseline setelah save/restore
+        ctx.textBaseline = 'alphabetic';
+        ctx.textAlign    = 'left';
 
         // Rank (#1, #2, dst)
-        ctx.font = 'bold 26px "Segoe UI", Arial';
+        const rankColor = i < 3 ? '#f97316' : '#ffffff';
+        ctx.font      = 'bold 26px sans-serif';
         ctx.fillStyle = rankColor;
-        ctx.textAlign = 'left';
         const rankText = `#${i + 1}`;
-        ctx.fillText(rankText, infoX, yOffset + 45);
-
+        ctx.fillText(rankText, infoX, yOffset + 48);
         const rankW = ctx.measureText(rankText).width;
 
-        // Separator dot
-        ctx.font = 'bold 20px "Segoe UI", Arial';
+        // Dot separator
+        const dot = ' • ';
+        ctx.font      = 'bold 20px sans-serif';
         ctx.fillStyle = '#6b7280';
-        ctx.fillText('•', infoX + rankW + 10, yOffset + 43);
-        const dotW = ctx.measureText('•').width;
+        ctx.fillText(dot, infoX + rankW, yOffset + 46);
+        const dotW = ctx.measureText(dot).width;
 
         // Username
-        ctx.font = 'bold 24px "Segoe UI", Arial';
+        ctx.font      = 'bold 24px sans-serif';
         ctx.fillStyle = '#f1f5f9';
-        const usernameX = infoX + rankW + 10 + dotW + 10;
-        ctx.fillText(`@${username}`, usernameX, yOffset + 45);
+        const unameX  = infoX + rankW + dotW;
+        ctx.fillText(`@${username}`, unameX, yOffset + 48);
         const unameW = ctx.measureText(`@${username}`).width;
 
         // Dot 2
-        ctx.font = 'bold 20px "Segoe UI", Arial';
+        ctx.font      = 'bold 20px sans-serif';
         ctx.fillStyle = '#6b7280';
-        ctx.fillText('•', usernameX + unameW + 10, yOffset + 43);
-        const dot2W = ctx.measureText('•').width;
+        ctx.fillText(dot, unameX + unameW, yOffset + 46);
+        const dot2W = ctx.measureText(dot).width;
 
         // LVL
-        ctx.font = 'bold 24px "Segoe UI", Arial';
+        ctx.font      = 'bold 24px sans-serif';
         ctx.fillStyle = '#f1f5f9';
-        ctx.fillText(`LVL: ${level}`, usernameX + unameW + 10 + dot2W + 10, yOffset + 45);
+        ctx.fillText(`LVL: ${level}`, unameX + unameW + dot2W, yOffset + 48);
 
-        // --- Progress bar ---
-        const barX = infoX;
-        const barY = yOffset + 62;
-        const barW = infoW;
-        const barH = 4;
-        const barR = 2;
-
+        // ── Progress bar ──
         const needed = XP_TO_LEVEL_UP(level);
-        const progressPercent = Math.min((xp / needed), 1);
+        const pct    = Math.min(xp / needed, 1);
+        const barX   = infoX;
+        const barY   = yOffset + 64;
+        const barW   = infoW;
+        const barH   = 4;
+        const barR   = 2;
 
         // Track
         ctx.save();
@@ -137,17 +131,15 @@ async function renderLeaderboard(usersData) {
         ctx.restore();
 
         // Fill
-        const fillW = Math.max(barR * 2, barW * progressPercent);
-        if (fillW > 0) {
-            ctx.save();
-            roundRect(ctx, barX, barY, fillW, barH, barR);
-            const grad = ctx.createLinearGradient(barX, 0, barX + fillW, 0);
-            grad.addColorStop(0, '#22d3ee');
-            grad.addColorStop(1, '#0ea5e9');
-            ctx.fillStyle = grad;
-            ctx.fill();
-            ctx.restore();
-        }
+        const fillW = Math.max(barR * 2, barW * pct);
+        ctx.save();
+        roundRect(ctx, barX, barY, fillW, barH, barR);
+        const grad = ctx.createLinearGradient(barX, 0, barX + fillW, 0);
+        grad.addColorStop(0, '#22d3ee');
+        grad.addColorStop(1, '#0ea5e9');
+        ctx.fillStyle = grad;
+        ctx.fill();
+        ctx.restore();
     }
 
     return canvas.toBuffer('image/png');
@@ -158,18 +150,14 @@ module.exports = {
     description: 'Melihat top 10 user dengan XP tertinggi di server ini',
     async execute(message, args, client) {
         const guildId = message.guild.id;
-        const xpDb = readDB(xpDbPath);
+        const xpDb    = readDB(xpDbPath);
 
-        // 1. Filter data hanya untuk server ini
+        // Filter data server ini
         const serverUsers = [];
         for (const key in xpDb) {
             if (key.startsWith(`${guildId}_`)) {
                 const userId = key.split('_')[1];
-                serverUsers.push({
-                    userId,
-                    xp: xpDb[key].xp,
-                    level: xpDb[key].level
-                });
+                serverUsers.push({ userId, xp: xpDb[key].xp, level: xpDb[key].level });
             }
         }
 
@@ -177,20 +165,20 @@ module.exports = {
             return message.reply('📊 Belum ada data XP di server ini. Mulai ngobrol untuk dapatkan XP!');
         }
 
-        // 2. Sort by Level, lalu XP
+        // Sort by level, lalu XP
         serverUsers.sort((a, b) => b.level - a.level || b.xp - a.xp);
         const top10 = serverUsers.slice(0, 10);
 
         const loadingMsg = await message.reply('⏳ Menyiapkan Leaderboard, mohon tunggu...');
 
-        // 3. Fetch semua user secara paralel
+        // Fetch semua user paralel
         const usersData = await Promise.all(top10.map(async (userData) => {
-            let username = 'Unknown User';
+            let username  = 'Unknown User';
             let avatarUrl = 'https://cdn.discordapp.com/embed/avatars/0.png';
             try {
                 const user = await client.users.fetch(userData.userId);
-                username = user.username;
-                avatarUrl = user.displayAvatarURL({ extension: 'png', size: 64 });
+                username   = user.username;
+                avatarUrl  = user.displayAvatarURL({ extension: 'png', size: 64 });
             } catch (e) {
                 console.error(`User tidak ditemukan: ${userData.userId}`);
             }
@@ -199,9 +187,9 @@ module.exports = {
 
         try {
             const imageBuffer = await renderLeaderboard(usersData);
-            const fileName = `${crypto.randomBytes(16).toString('hex')}.png`;
-            const attachment = new AttachmentBuilder(imageBuffer, { name: fileName });
-            const serverName = message.guild.name;
+            const fileName    = `${crypto.randomBytes(16).toString('hex')}.png`;
+            const attachment  = new AttachmentBuilder(imageBuffer, { name: fileName });
+            const serverName  = message.guild.name;
 
             const components = [
                 {
@@ -212,11 +200,9 @@ module.exports = {
                         {
                             type: 9,
                             accessory: {
-                                type: 2,
-                                style: 5,
+                                type: 2, style: 5,
                                 label: 'View Leaderboard',
-                                emoji: null,
-                                disabled: false,
+                                emoji: null, disabled: false,
                                 url: `https://example.com/leaderboard/${guildId}`
                             },
                             components: [{ type: 10, content: `# ${serverName}` }]
@@ -233,7 +219,7 @@ module.exports = {
             await loadingMsg.delete();
         } catch (error) {
             console.error('Gagal merender Leaderboard:', error);
-            loadingMsg.edit('❌ Gagal memuat Leaderboard karena error saat merender gambar.');
+            await loadingMsg.edit('❌ Gagal memuat Leaderboard karena error saat merender gambar.');
         }
     }
 };
