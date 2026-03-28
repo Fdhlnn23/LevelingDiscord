@@ -1,12 +1,13 @@
 const { AttachmentBuilder } = require('discord.js');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
-const fs = require('fs');
+const { loadFonts } = require('../canvas-fonts');
+const fs     = require('fs');
 const crypto = require('crypto');
 
+loadFonts(); // aman dipanggil berkali-kali, hanya load sekali
+
 const xpDbPath = './database/xp.json';
-
 function readDB(dbPath) { return JSON.parse(fs.readFileSync(dbPath, 'utf8')); }
-
 const XP_TO_LEVEL_UP = (level) => Math.floor(100 * Math.pow(level + 1, 1.8));
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -31,8 +32,6 @@ async function renderLeaderboard(usersData) {
 
     const canvas = createCanvas(W, H);
     const ctx    = canvas.getContext('2d');
-
-    // WAJIB — tanpa ini teks tidak muncul
     ctx.textBaseline = 'alphabetic';
 
     // Background
@@ -43,7 +42,7 @@ async function renderLeaderboard(usersData) {
         const { username, avatarUrl, level, xp } = usersData[i];
         const yOffset = i * (ROW_H + SEP_H);
 
-        // Row background
+        // Row
         ctx.fillStyle = '#23272f';
         ctx.fillRect(0, yOffset, W, ROW_H);
 
@@ -73,64 +72,57 @@ async function renderLeaderboard(usersData) {
             ctx.restore();
         }
 
-        // ── Teks baris ──
         const infoX = avatarX + avatarSize + 16;
         const infoW = W - infoX - 20;
 
-        // Pastikan textBaseline setelah save/restore
+        // Pastikan state teks bersih setelah save/restore
         ctx.textBaseline = 'alphabetic';
         ctx.textAlign    = 'left';
 
-        // Rank (#1, #2, dst)
+        // Rank
         const rankColor = i < 3 ? '#f97316' : '#ffffff';
-        ctx.font      = 'bold 26px sans-serif';
-        ctx.fillStyle = rankColor;
-        const rankText = `#${i + 1}`;
+        ctx.font        = '700 26px Inter';
+        ctx.fillStyle   = rankColor;
+        const rankText  = `#${i + 1}`;
         ctx.fillText(rankText, infoX, yOffset + 48);
         const rankW = ctx.measureText(rankText).width;
 
-        // Dot separator
-        const dot = ' • ';
-        ctx.font      = 'bold 20px sans-serif';
+        // Dot
+        const dot  = ' • ';
+        ctx.font      = '700 20px Inter';
         ctx.fillStyle = '#6b7280';
         ctx.fillText(dot, infoX + rankW, yOffset + 46);
         const dotW = ctx.measureText(dot).width;
 
         // Username
-        ctx.font      = 'bold 24px sans-serif';
+        ctx.font      = '700 24px Inter';
         ctx.fillStyle = '#f1f5f9';
         const unameX  = infoX + rankW + dotW;
         ctx.fillText(`@${username}`, unameX, yOffset + 48);
-        const unameW = ctx.measureText(`@${username}`).width;
+        const unameW  = ctx.measureText(`@${username}`).width;
 
         // Dot 2
-        ctx.font      = 'bold 20px sans-serif';
+        ctx.font      = '700 20px Inter';
         ctx.fillStyle = '#6b7280';
         ctx.fillText(dot, unameX + unameW, yOffset + 46);
-        const dot2W = ctx.measureText(dot).width;
+        const dot2W   = ctx.measureText(dot).width;
 
         // LVL
-        ctx.font      = 'bold 24px sans-serif';
+        ctx.font      = '700 24px Inter';
         ctx.fillStyle = '#f1f5f9';
         ctx.fillText(`LVL: ${level}`, unameX + unameW + dot2W, yOffset + 48);
 
-        // ── Progress bar ──
+        // Progress bar
         const needed = XP_TO_LEVEL_UP(level);
         const pct    = Math.min(xp / needed, 1);
-        const barX   = infoX;
-        const barY   = yOffset + 64;
-        const barW   = infoW;
-        const barH   = 4;
-        const barR   = 2;
+        const barX   = infoX, barY = yOffset + 64, barW = infoW, barH = 4, barR = 2;
 
-        // Track
         ctx.save();
         roundRect(ctx, barX, barY, barW, barH, barR);
         ctx.fillStyle = '#3a3f4b';
         ctx.fill();
         ctx.restore();
 
-        // Fill
         const fillW = Math.max(barR * 2, barW * pct);
         ctx.save();
         roundRect(ctx, barX, barY, fillW, barH, barR);
@@ -152,7 +144,6 @@ module.exports = {
         const guildId = message.guild.id;
         const xpDb    = readDB(xpDbPath);
 
-        // Filter data server ini
         const serverUsers = [];
         for (const key in xpDb) {
             if (key.startsWith(`${guildId}_`)) {
@@ -165,13 +156,11 @@ module.exports = {
             return message.reply('📊 Belum ada data XP di server ini. Mulai ngobrol untuk dapatkan XP!');
         }
 
-        // Sort by level, lalu XP
         serverUsers.sort((a, b) => b.level - a.level || b.xp - a.xp);
         const top10 = serverUsers.slice(0, 10);
 
         const loadingMsg = await message.reply('⏳ Menyiapkan Leaderboard, mohon tunggu...');
 
-        // Fetch semua user paralel
         const usersData = await Promise.all(top10.map(async (userData) => {
             let username  = 'Unknown User';
             let avatarUrl = 'https://cdn.discordapp.com/embed/avatars/0.png';
