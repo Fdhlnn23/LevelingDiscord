@@ -1,8 +1,12 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, AttachmentBuilder, Collection } = require('discord.js');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
+const { loadFonts } = require('./canvas-fonts'); // <-- load font dulu
 const fs = require('fs');
 const path = require('path');
+
+// WAJIB dipanggil sebelum render apapun
+loadFonts();
 
 const client = new Client({
     intents: [
@@ -53,7 +57,7 @@ setInterval(() => {
 }, 10_000);
 
 // --- KONFIGURASI XP ---
-const XP_PER_MESSAGE = 20;
+const XP_PER_MESSAGE    = 20;
 const XP_PER_VOICE_TICK = 15;
 const VOICE_XP_INTERVAL_MS = 10000;
 const PREFIX = '?';
@@ -78,9 +82,7 @@ function roundRect(ctx, x, y, w, h, r) {
 async function renderLevelUpCard(member, newLevel) {
     const W = 800, H = 250;
     const canvas = createCanvas(W, H);
-    const ctx = canvas.getContext('2d');
-
-    // WAJIB — tanpa ini teks tidak muncul
+    const ctx    = canvas.getContext('2d');
     ctx.textBaseline = 'alphabetic';
 
     // Background gradient
@@ -112,22 +114,18 @@ async function renderLevelUpCard(member, newLevel) {
 
     // Avatar
     const avatarSize = 130;
-    const avatarCX = cardX + 40 + avatarSize / 2;
-    const avatarCY = cardY + cardH / 2;
+    const avatarCX   = cardX + 40 + avatarSize / 2;
+    const avatarCY   = cardY + cardH / 2;
 
     try {
         const avatarUrl = member.user.displayAvatarURL({ extension: 'png', size: 256 });
         const avatarImg = await loadImage(avatarUrl);
-
-        // Border lingkaran
         ctx.save();
         ctx.beginPath();
         ctx.arc(avatarCX, avatarCY, avatarSize / 2 + 5, 0, Math.PI * 2);
         ctx.fillStyle = '#38bdf8';
         ctx.fill();
         ctx.restore();
-
-        // Clip & gambar avatar
         ctx.save();
         ctx.beginPath();
         ctx.arc(avatarCX, avatarCY, avatarSize / 2, 0, Math.PI * 2);
@@ -148,26 +146,23 @@ async function renderLevelUpCard(member, newLevel) {
         ctx.restore();
     }
 
-    // Teks — textBaseline dipastikan ulang setelah save/restore
+    // Teks
     const textX = avatarCX + avatarSize / 2 + 35;
     ctx.textBaseline = 'alphabetic';
     ctx.textAlign    = 'left';
 
-    // Label "LEVEL UP!"
-    ctx.font      = 'bold 15px sans-serif';
+    ctx.font      = '700 15px Inter';
     ctx.fillStyle = '#94a3b8';
     ctx.fillText('LEVEL UP!', textX, cardY + 70);
 
-    // Username
-    ctx.font        = 'bold 42px sans-serif';
+    ctx.font        = '700 42px Inter';
     ctx.fillStyle   = '#f8fafc';
     ctx.shadowColor = 'rgba(0,0,0,0.5)';
     ctx.shadowBlur  = 6;
     ctx.fillText(member.user.username, textX, cardY + 120);
     ctx.shadowBlur  = 0;
 
-    // Level
-    ctx.font      = 'bold 32px sans-serif';
+    ctx.font      = '700 32px Inter';
     ctx.fillStyle = '#38bdf8';
     ctx.fillText(`Level ${newLevel}`, textX, cardY + 162);
 
@@ -177,17 +172,17 @@ async function renderLevelUpCard(member, newLevel) {
 // ── TAMBAH XP + CEK LEVEL UP ──
 async function addXpAndCheckLevelUp(guildId, userId, xpAmount, notifyTarget) {
     const dbKey = `${guildId}_${userId}`;
-    const entry = getXpEntry(dbKey);
+    const entry  = getXpEntry(dbKey);
 
-    entry.xp += xpAmount;
+    entry.xp    += xpAmount;
     xpCacheDirty = true;
 
     const xpNeeded = XP_TO_LEVEL_UP(entry.level);
     if (entry.xp < xpNeeded) return;
 
-    entry.level += 1;
-    entry.xp    -= xpNeeded;
-    xpCacheDirty = true;
+    entry.level  += 1;
+    entry.xp     -= xpNeeded;
+    xpCacheDirty  = true;
 
     const newLevel = entry.level;
     const guild    = client.guilds.cache.get(guildId);
@@ -231,8 +226,8 @@ client.on('ready', () => {
         isVoiceTickRunning = true;
         try {
             for (const guild of client.guilds.cache.values()) {
-                const settingsDb   = readDB(settingsDbPath);
-                const logChannelId = settingsDb[guild.id]?.logChannel;
+                const settingsDb    = readDB(settingsDbPath);
+                const logChannelId  = settingsDb[guild.id]?.logChannel;
                 const notifyChannel = logChannelId ? guild.channels.cache.get(logChannelId) : null;
 
                 for (const [, voiceChannel] of guild.channels.cache) {
